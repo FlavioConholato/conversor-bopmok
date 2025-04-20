@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Conversor BOPM → Término de Ocorrência</title>
+  <style>
+    body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+    textarea { width: 100%; height: 200px; margin-bottom: 10px; }
+    button { padding: 10px 20px; font-size: 16px; margin-right: 10px; }
+    pre { background: #fff; padding: 15px; border: 1px solid #ccc; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+
+<h2>Conversor de Texto X → Término de Ocorrência</h2>
+
+<label for="textoX">Cole o Texto X (bruto):</label>
+<textarea id="textoX"></textarea>
+
+<button onclick="converterTexto()">Converter</button>
+<button onclick="baixarTxt()">Baixar como .txt</button>
+
+<h3>Texto Y (formatado):</h3>
+<pre id="textoY"></pre>
+
+<script>
+let textoFinal = "";
+
+function converterTexto() {
+  const textoX = document.getElementById("textoX").value;
+
+  function extrair(regex, texto, grupo = 1) {
+    const match = texto.match(regex);
+    return match ? match[grupo].trim() : "Não informado";
+  }
+
+  const data = extrair(/Data\/Hora do Fato:\s*(\d{2}\/\d{2}\/\d{4})/, textoX);
+  const horaInicial = extrair(/Data\/Hora Comunicação dos Fatos:\s*\d{2}\/\d{2}\/\d{4} (\d{2}:\d{2})/, textoX);
+  const local = extrair(/rj .*? - .*? - .*?$/, textoX);
+  const codInicial = extrair(/\*Código Inicial:\*\s*(.*?)\n/, textoX);
+  const codFinal = extrair(/\*Código Final:\*\s*(.*?)\n/, textoX);
+  const bopm = extrair(/\*BOPM Nº\s*(.*?)\*/, textoX);
+  const lat = extrair(/Latitude:\s*(-?\d+\.\d+)/, textoX);
+  const lon = extrair(/Longitude:\s*(-?\d+\.\d+)/, textoX);
+  const linkGeo = `https://maps.google.com/?q=${lat},${lon}`;
+  const equipe = textoX.match(/Guarnição\/Policiamento([\s\S]*?)\n\n/)?.[1].trim().split('\n').map(l => l.trim()).join(" / ") || "Não informado";
+  const dinamica = extrair(/\*Histórico\*\n([\s\S]*?)observações/i, textoX);
+  const observacoes = textoX.match(/observações\n([\s\S]*)/i)?.[1].trim() || "Sem observações";
+  const horaFinal = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  let qualificados = "";
+  const pessoas = textoX.split(/Vítima - Pessoa Física/i);
+  pessoas.shift();
+  pessoas.forEach((pessoa, i) => {
+    const nome = extrair(/Nome:\s*(.*)/, pessoa);
+    const cpf = extrair(/CPF:\s*(.*)/, pessoa);
+    const nascimento = extrair(/Nascimento:\s*(.*)/, pessoa);
+    const cnh = extrair(/nº CNH:\s*(\d+)/, pessoa);
+    const categoria = extrair(/Categoria:\s*([A-Z]+)/, pessoa);
+    const validade = extrair(/VAL:\s*([0-9\/]+)/i, pessoa) || "Não informado";
+    const bam = "Não houve";
+
+    qualificados += `A${i + 1}: ${nome.toUpperCase()}\nCPF: ${cpf}\nCNH: ${cnh}\nCAT: ${categoria}\nVAL: ${validade}\nDN: ${nascimento}\nBAM: ${bam}\n\n`;
+  });
+
+  let veiculos = "";
+  const blocosVeiculos = textoX.split(/Tipo: ENVOLVIDO NO ACIDENTE/i);
+  blocosVeiculos.shift();
+  blocosVeiculos.forEach((bloco, i) => {
+    const marca = extrair(/Marca:\s*(.*)/, bloco);
+    const modelo = extrair(/Modelo:\s*(.*)/, bloco);
+    const placa = extrair(/Placa:\s*(.*)/, bloco);
+    const cor = extrair(/Cor:\s*(.*)/, bloco);
+    const ano = "Não informado";
+    veiculos += `(V${i + 1})\nMARCA/MODELO: ${marca} ${modelo}\nPLACA: ${placa}\nCOR: ${cor}\nANO: ${ano}\n\n`;
+  });
+
+  textoFinal = `SECRETARIA DE ESTADO DE POLÍCIA MILITAR
+
+COMANDO DE POLICIAMENTO RODOVIÁRIO (CPRv)
+
+5ª CTRv - POSTO 5.3 
+MIRACEMA/PALMA 
+
+*TERMINO DE OCORRÊNCIA*
+
+DATA: ${data}
+HORA INICIAL: ${horaInicial}
+HORA FINAL: ${horaFinal}
+
+LOCAL: ${local.toUpperCase()}
+
+LINK GEORREFERENCIADO:
+${linkGeo}
+
+*CÓD. INICIAL*: ${codInicial}
+*CÓD. FINAL*: ${codFinal}
+BOPM: ${bopm}
+RO: Não houve 
+DP: 136DP
+BRAT: Não informado
+Protocolo: Não informado
+
+QUALIFICADOS:
+${qualificados}
+
+VEÍCULOS ENVOLVIDOS:
+${veiculos}
+
+EQUIPE: 
+${equipe}
+VTR: Não informado
+ 
+DINÂMICA:
+${dinamica}
+
+OBSERVAÇÕES:
+${observacoes}
+`;
+
+  document.getElementById("textoY").textContent = textoFinal;
+}
+
+function baixarTxt() {
+  if (!textoFinal) {
+    alert("Por favor, converta o texto antes de baixar.");
+    return;
+  }
+
+  const blob = new Blob([textoFinal], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `termino_ocorrencia_${new Date().toISOString().slice(0,10)}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+</script>
+
+</body>
+</html>
